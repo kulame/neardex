@@ -1,28 +1,25 @@
 use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSchema, BorshSerialize},
-    collections::{LookupMap, Vector},
-    BorshStorageKey,
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    collections::LookupSet,
+    BorshStorageKey, PanicOnDefault,
 };
 use near_sdk::{env, ext_contract, near_bindgen, AccountId, Balance, Promise};
-use near_sdk::{
-    serde::{Deserialize, Serialize},
-    PromiseOrValue,
-};
+use near_sdk::{serde::Serialize, PromiseOrValue};
 near_sdk::setup_alloc!();
 
 #[near_bindgen]
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(BorshSerialize, BorshDeserialize, PanicOnDefault)]
 pub struct Contract {
     pub fee_to: AccountId,
-    pub get_pair: LookupMap<AccountId, LookupMap<AccountId, AccountId>>,
-    pub all_paris: Vector<AccountId>,
+    pub all_pairs: LookupSet<AccountId>,
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
-    GetPair,
     AllParis,
 }
+
+const MIN_ATTACHED_BALANCE: Balance = 1_000_000_000_000_000_000_000_000;
 
 #[ext_contract(ext_self)]
 pub trait ExtSelf {
@@ -52,12 +49,16 @@ impl Contract {
     pub fn new() -> Self {
         Self {
             fee_to: String::from("kula.testnet"),
-            get_pair: LookupMap::new(StorageKeys::GetPair),
-            all_paris: Vector::new(StorageKeys::AllParis),
+            all_pairs: LookupSet::new(StorageKeys::AllParis),
         }
     }
 
-    fn create_pair(&mut self, token_a: AccountId, token_b: AccountId) -> Promise {
+    #[payable]
+    pub fn create_pair(&mut self, token_a: AccountId, token_b: AccountId) -> Promise {
+        assert!(
+            env::attached_deposit() >= MIN_ATTACHED_BALANCE,
+            "Not enough attached deposit to complete staking pool creation"
+        );
         let token1: AccountId;
         let token2: AccountId;
         if token_a > token_b {
@@ -67,12 +68,12 @@ impl Contract {
             token1 = token_a;
             token2 = token_b;
         }
-        let pair_account_id = format!("{}.{}.{}", token1, token2, env::current_account_id());
+        let pair = format!("{}.{}", token1, token2).replace(".", "-");
+        let pair_account_id = format!("{}.{}", pair, env::current_account_id());
         assert!(
             env::is_valid_account_id(pair_account_id.as_bytes()),
             "The staking pool account ID is invalid"
         );
-        println!("{}", pair_account_id);
         Promise::new(pair_account_id.clone())
             .create_account()
             .transfer(env::attached_deposit())
@@ -80,8 +81,8 @@ impl Contract {
             .function_call(
                 b"new".to_vec(),
                 near_sdk::serde_json::to_vec(&PairArgs {
-                    token_a: token1,
-                    token_b: token2,
+                    token_a: token1.clone(),
+                    token_b: token2.clone(),
                 })
                 .unwrap(),
                 NO_DEPOSIT,
@@ -97,6 +98,7 @@ impl Contract {
 
     pub fn on_pair_created(&mut self, pair_account_id: AccountId) -> PromiseOrValue<bool> {
         println!("{}", pair_account_id);
+        self.all_pairs.insert(&pair_account_id);
         PromiseOrValue::Value(true)
     }
 }

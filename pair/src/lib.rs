@@ -1,6 +1,6 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
-use near_sdk::{env, near_bindgen, AccountId};
+use near_sdk::{env, near_bindgen, AccountId, Balance};
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -8,6 +8,8 @@ pub struct Contract {
     pub factory: AccountId,
     pub token_a: AccountId,
     pub token_b: AccountId,
+    pub reserve_a: Balance,
+    pub reserve_b: Balance,
 }
 
 #[near_bindgen]
@@ -20,8 +22,14 @@ impl Contract {
             factory: factory,
             token_a: token_a,
             token_b: token_b,
+            reserve_a: 0,
+            reserve_b: 0,
         };
         this
+    }
+
+    pub fn get_reserves(&self) -> (Balance, Balance) {
+        (self.reserve_a, self.reserve_b)
     }
 }
 
@@ -52,5 +60,14 @@ mod tests {
         let context = get_context(accounts(1));
         testing_env!(context.build());
         let _contract = Contract::new(accounts(2).into(), accounts(3).into());
+    }
+
+    #[test]
+    fn test_get_reverses() {
+        let context = get_context(accounts(1));
+        testing_env!(context.build());
+        let contract = Contract::new(accounts(2).into(), accounts(3).into());
+        let reserves = contract.get_reserves();
+        println!("{},{}", reserves.0, reserves.1);
     }
 }
