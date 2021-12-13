@@ -38,6 +38,7 @@ pub struct PairArgs {
     token_b: AccountId,
 }
 const NO_DEPOSIT: Balance = 0;
+const ONE_YOCTO: Balance = 1;
 
 pub mod gas {
     use near_sdk::Gas;
