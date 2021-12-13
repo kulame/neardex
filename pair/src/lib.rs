@@ -1,9 +1,12 @@
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    PanicOnDefault,
+};
 
 use near_sdk::{env, near_bindgen, AccountId, Balance};
 
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
     pub factory: AccountId,
     pub token_a: AccountId,

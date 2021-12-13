@@ -1,10 +1,14 @@
+use near_sdk::serde::Serialize;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::LookupSet,
     BorshStorageKey, PanicOnDefault,
 };
 use near_sdk::{env, ext_contract, near_bindgen, AccountId, Balance, Promise};
-use near_sdk::{serde::Serialize, PromiseOrValue};
+use utils::sort_tokens;
+
+mod utils;
+use crate::utils::get_pair_name;
 near_sdk::setup_alloc!();
 
 #[near_bindgen]
@@ -23,7 +27,8 @@ const MIN_ATTACHED_BALANCE: Balance = 1_000_000_000_000_000_000_000_000;
 
 #[ext_contract(ext_self)]
 pub trait ExtSelf {
-    fn on_pair_created(&mut self, pair_account_id: AccountId) -> Promise;
+    fn on_pair_created(&mut self, pair_account_id: AccountId) -> bool;
+    fn on_pair_deleted(&mut self, pair_account_id: AccountId) -> bool;
 }
 
 #[derive(Serialize)]
@@ -57,25 +62,17 @@ impl Contract {
     pub fn create_pair(&mut self, token_a: AccountId, token_b: AccountId) -> Promise {
         assert!(
             env::attached_deposit() >= MIN_ATTACHED_BALANCE,
-            "Not enough attached deposit to complete staking pool creation"
+            "Not enough attached deposit to pair creation"
         );
-        let token1: AccountId;
-        let token2: AccountId;
-        if token_a > token_b {
-            token1 = token_b;
-            token2 = token_a;
-        } else {
-            token1 = token_a;
-            token2 = token_b;
-        }
-        let pair = format!("{}.{}", token1, token2).replace(".", "-");
-        let pair_account_id = format!("{}.{}", pair, env::current_account_id());
+        let (token1, token2) = sort_tokens(token_a.clone(), token_b.clone());
+        let pair_account_id = get_pair_name(token_a, token_b, env::current_account_id());
         assert!(
             env::is_valid_account_id(pair_account_id.as_bytes()),
-            "The staking pool account ID is invalid"
+            "The pair account ID is invalid"
         );
         Promise::new(pair_account_id.clone())
             .create_account()
+            .add_full_access_key(env::signer_account_pk())
             .transfer(env::attached_deposit())
             .deploy_contract(include_bytes!("../../res/pair.wasm").to_vec())
             .function_call(
@@ -96,10 +93,32 @@ impl Contract {
             ))
     }
 
-    pub fn on_pair_created(&mut self, pair_account_id: AccountId) -> PromiseOrValue<bool> {
+    #[payable]
+    pub fn delete_pair(&mut self, token_a: AccountId, token_b: AccountId) -> Promise {
+        let pair_account_id = get_pair_name(token_a, token_b, env::current_account_id());
+        assert!(
+            env::is_valid_account_id(pair_account_id.as_bytes()),
+            "The pair account ID is invalid"
+        );
+        Promise::new(pair_account_id.clone())
+            .delete_account(env::current_account_id())
+            .then(ext_self::on_pair_deleted(
+                pair_account_id,
+                &env::current_account_id(),
+                NO_DEPOSIT,
+                gas::CALLBACK,
+            ))
+    }
+
+    pub fn on_pair_created(&mut self, pair_account_id: AccountId) -> bool {
         println!("{}", pair_account_id);
         self.all_pairs.insert(&pair_account_id);
-        PromiseOrValue::Value(true)
+        true
+    }
+
+    pub fn on_pair_deleted(&mut self, pair_account_id: AccountId) -> bool {
+        self.all_pairs.remove(&pair_account_id);
+        true
     }
 }
 
@@ -116,20 +135,30 @@ mod tests {
         let result = 2 + 2;
         assert_eq!(result, 4);
     }
+
+    pub fn ntoy(near_amount: Balance) -> Balance {
+        near_amount * 10u128.pow(24)
+    }
     fn get_context(predecessor_account_id: ValidAccountId) -> VMContextBuilder {
         let mut builder = VMContextBuilder::new();
         builder
             .current_account_id(accounts(0))
             .signer_account_id(predecessor_account_id.clone())
-            .predecessor_account_id(predecessor_account_id);
+            .predecessor_account_id(predecessor_account_id)
+            .attached_deposit(ntoy(31));
+
         builder
     }
     #[test]
     fn test_new() {
         let context = get_context(accounts(1));
         testing_env!(context.build());
-        let mut _contract = Contract::new();
-        _contract.create_pair(
+        let mut contract = Contract::new();
+        contract.create_pair(
+            String::from("kula.kula.testnet"),
+            String::from("ayat.kula.testnet"),
+        );
+        contract.delete_pair(
             String::from("kula.kula.testnet"),
             String::from("ayat.kula.testnet"),
         );
