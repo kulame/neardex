@@ -1,18 +1,33 @@
+use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
+use near_sdk::collections::UnorderedMap;
+use near_sdk::json_types::{ValidAccountId, U128};
 use near_sdk::AccountId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    env, ext_contract, near_bindgen, Balance, PanicOnDefault, Promise, PromiseResult,
+    env, ext_contract, near_bindgen, Balance, BorshStorageKey, PanicOnDefault, Promise,
+    PromiseOrValue, PromiseResult,
 };
 use utils::{get_amount, get_pair_name};
 
+use near_sdk::collections::LookupMap;
 mod utils;
 use crate::utils::quote;
-use near_sdk::json_types::ValidAccountId;
+
+#[derive(BorshStorageKey, BorshSerialize)]
+pub enum StorageKey {
+    Accounts,
+}
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct Account {
+    pub near_amount: Balance,
+    pub tokens: UnorderedMap<AccountId, Balance>,
+}
 
 #[near_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, PanicOnDefault)]
 pub struct Contract {
     pub factory: AccountId,
+    pub accounts: LookupMap<AccountId, Account>,
 }
 
 #[ext_contract(ext_pair)]
@@ -34,11 +49,6 @@ pub trait SelfSelf {
     fn ft_transfer_callback(&mut self) -> String;
 }
 
-#[ext_contract(ext_token)]
-pub trait Token {
-    fn ft_transfer(&mut self, receiver_id: AccountId, amount: String, memo: Option<String>);
-    fn storage_deposit(&mut self, account_id: AccountId, registration_only: Option<bool>);
-}
 pub mod gas {
     use near_sdk::Gas;
     const BASE: Gas = 10_000_000_000_000;
@@ -56,6 +66,7 @@ impl Contract {
     pub fn new() -> Self {
         Self {
             factory: String::from("factory.kula.testnet"),
+            accounts: LookupMap::new(StorageKey::Accounts),
         }
     }
 
@@ -89,45 +100,28 @@ impl Contract {
         pair: AccountId,
         token_a: AccountId,
         token_b: AccountId,
-    ) -> Promise {
+    ) -> String {
         match env::promise_result(0) {
             PromiseResult::NotReady => unreachable!(),
             PromiseResult::Failed => env::panic(b"ERR_CALL_FAILED"),
-            PromiseResult::Successful(val) => {
-                let (reverse_a, reverse_b) =
-                    near_sdk::serde_json::from_slice::<(Balance, Balance)>(&val).unwrap();
-                let (amount1, amount2) =
-                    get_amount(reverse_a, reverse_b, amount_a_desired, amount_b_desired);
-                ext_token::storage_deposit(
-                    pair.clone(),
-                    Some(true),
-                    &token_a,
-                    MIN_STORAGE_BALANCE,
-                    gas::CALL,
-                )
-                .then(ext_token::ft_transfer(
-                    pair.clone(),
-                    amount1.to_string(),
-                    Some(String::from("hello")),
-                    &token_a,
-                    ONE_YOCTO,
-                    gas::CALL,
-                ))
-                .then(ext_self::ft_transfer_callback(
-                    &env::current_account_id(),
-                    NO_DEPOSIT,
-                    gas::CALL,
-                ))
-            }
+            PromiseResult::Successful(val) => "success".into(),
         }
     }
-    #[private]
-    pub fn ft_transfer_callback(&mut self) -> String {
-        match env::promise_result(0) {
-            PromiseResult::NotReady => unreachable!(),
-            PromiseResult::Failed => env::panic(b"ERR_CALL_FAILED"),
-            PromiseResult::Successful(val) => String::from("success"),
-        }
+}
+
+#[near_bindgen]
+impl FungibleTokenReceiver for Contract {
+    #[allow(unreachable_code)]
+    fn ft_on_transfer(
+        &mut self,
+        sender_id: ValidAccountId,
+        amount: U128,
+        msg: String,
+    ) -> PromiseOrValue<U128> {
+        let token_in = env::predecessor_account_id();
+        env::log(token_in.as_bytes());
+        env::log("test ft_on_transfer kula".as_bytes());
+        PromiseOrValue::Value(U128(0))
     }
 }
 #[cfg(test)]
@@ -167,5 +161,7 @@ mod tests {
             10,
             10,
         );
+        // test the code
+        println!("hello");
     }
 }
