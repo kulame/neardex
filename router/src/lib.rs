@@ -9,9 +9,12 @@ use near_sdk::{
 };
 use utils::{get_amount, get_pair_name};
 
+use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::collections::LookupMap;
 mod utils;
+mod errors;
 use crate::utils::quote;
+use crate::errors::*;
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKey {
@@ -26,8 +29,9 @@ pub struct Account {
 #[near_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, PanicOnDefault)]
 pub struct Contract {
-    pub factory: AccountId,
-    pub accounts: LookupMap<AccountId, Account>,
+    factory: AccountId,
+    accounts: LookupMap<AccountId, Account>,
+    state: RunningState,
 }
 
 #[ext_contract(ext_pair)]
@@ -60,6 +64,14 @@ const NO_DEPOSIT: Balance = 0;
 const ONE_YOCTO: Balance = 1;
 const MIN_STORAGE_BALANCE: Balance = 12_500_000_000_000_000_000_000;
 
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Eq, PartialEq, Clone)]
+#[serde(crate = "near_sdk::serde")]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
+pub enum RunningState {
+    Running, Paused
+}
+
 #[near_bindgen]
 impl Contract {
     #[init]
@@ -67,6 +79,7 @@ impl Contract {
         Self {
             factory: String::from("factory.kula.testnet"),
             accounts: LookupMap::new(StorageKey::Accounts),
+            state: RunningState::Running,
         }
     }
 
@@ -111,6 +124,7 @@ impl Contract {
 
 #[near_bindgen]
 impl FungibleTokenReceiver for Contract {
+    /// 当转入此账户时， 自动记录用户的账户信息和充值金额
     #[allow(unreachable_code)]
     fn ft_on_transfer(
         &mut self,
@@ -122,6 +136,17 @@ impl FungibleTokenReceiver for Contract {
         env::log(token_in.as_bytes());
         env::log("test ft_on_transfer kula".as_bytes());
         PromiseOrValue::Value(U128(0))
+    }
+}
+
+/// Internal methods implementation.
+impl Contract {
+    /// 判断合约是否在运行状态
+    fn assert_contract_running(&self) {
+        match self.state {
+            RunningState::Running => (),
+            _ => env::panic(ERR51_CONTRACT_PAUSED.as_bytes()),
+        };
     }
 }
 #[cfg(test)]
