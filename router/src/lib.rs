@@ -5,25 +5,32 @@ use near_sdk::AccountId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env, ext_contract, near_bindgen, Balance, BorshStorageKey, PanicOnDefault, Promise,
-    PromiseOrValue, PromiseResult,
+    PromiseOrValue, PromiseResult, StorageUsage,
 };
 use utils::{get_amount, get_pair_name};
 
-use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::collections::LookupMap;
-mod utils;
+use near_sdk::serde::{Deserialize, Serialize};
+mod account;
 mod errors;
-use crate::utils::quote;
+mod storage_impl;
+mod utils;
+
 use crate::errors::*;
+use crate::utils::quote;
+
+near_sdk::setup_alloc!();
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKey {
     Accounts,
+    AccountTokens { account_id: AccountId },
 }
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Account {
     pub near_amount: Balance,
     pub tokens: UnorderedMap<AccountId, Balance>,
+    pub storage_used: StorageUsage,
 }
 
 #[near_bindgen]
@@ -40,7 +47,7 @@ trait Pair {
 }
 
 #[ext_contract(ext_self)]
-pub trait SelfSelf {
+pub trait ExtSelf {
     fn add_liquidity_callback(
         &self,
         amount_a_desired: Balance,
@@ -64,12 +71,12 @@ const NO_DEPOSIT: Balance = 0;
 const ONE_YOCTO: Balance = 1;
 const MIN_STORAGE_BALANCE: Balance = 12_500_000_000_000_000_000_000;
 
-
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Eq, PartialEq, Clone)]
 #[serde(crate = "near_sdk::serde")]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 pub enum RunningState {
-    Running, Paused
+    Running,
+    Paused,
 }
 
 #[near_bindgen]
@@ -147,6 +154,10 @@ impl Contract {
             RunningState::Running => (),
             _ => env::panic(ERR51_CONTRACT_PAUSED.as_bytes()),
         };
+    }
+
+    pub fn internal_get_account(&self, account_id: &AccountId) -> Option<Account> {
+        self.accounts.get(account_id)
     }
 }
 #[cfg(test)]
