@@ -28,13 +28,21 @@ impl StorageManagement for Contract {
         if registration_only {
             if already_registered {
                 log!("ERR_ACC_REGISTERED");
+                if amount > 0 {
+                    Promise::new(env::predecessor_account_id()).transfer(amount);
+                }
+            } else {
+                self.internal_register_account(&account_id, min_balance);
+                let refund = amount - min_balance;
+                if refund > 0 {
+                    Promise::new(env::predecessor_account_id()).transfer(refund);
+                }
             }
+        } else {
+            self.internal_register_account(&account_id, amount);
         }
-
-        StorageBalance {
-            total: U128(1),
-            available: U128(1),
-        }
+        self.storage_balance_of(account_id.try_into().unwrap())
+            .unwrap()
     }
 
     #[payable]

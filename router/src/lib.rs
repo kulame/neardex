@@ -28,6 +28,7 @@ pub enum StorageKey {
 }
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Account {
+    pub account_id: AccountId,
     pub near_amount: Balance,
     pub tokens: UnorderedMap<AccountId, Balance>,
     pub storage_used: StorageUsage,
@@ -158,6 +159,22 @@ impl Contract {
 
     pub fn internal_get_account(&self, account_id: &AccountId) -> Option<Account> {
         self.accounts.get(account_id)
+    }
+
+    pub fn internal_unwrap_or_default_account(&self, account_id: &AccountId) -> Account {
+        self.internal_get_account(account_id)
+            .unwrap_or_else(|| Account::new(account_id))
+    }
+
+    pub fn internal_register_account(&mut self, account_id: &AccountId, amount: Balance) {
+        let mut account = self.internal_unwrap_or_default_account(account_id);
+        account.near_amount += amount;
+        self.internal_save_account(account);
+    }
+
+    pub fn internal_save_account(&mut self, account: Account) {
+        account.assert_storage_usage();
+        self.accounts.insert(&account.account_id.clone(), &account);
     }
 }
 #[cfg(test)]

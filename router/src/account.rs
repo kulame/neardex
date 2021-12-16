@@ -1,7 +1,6 @@
-use crate::{Account, StorageKey};
+use crate::*;
 use near_sdk::collections::UnorderedMap;
 use near_sdk::{env, AccountId, Balance, StorageUsage};
-
 pub const UNIT_STORAGE: StorageUsage = 256;
 
 impl Account {
@@ -12,6 +11,7 @@ impl Account {
                 account_id: account_id.clone(),
             }),
             storage_used: 0,
+            account_id: account_id.clone(),
         }
     }
 
@@ -30,5 +30,15 @@ impl Account {
 
     pub fn min_storage_usage() -> Balance {
         UNIT_STORAGE as Balance * env::storage_byte_cost()
+    }
+
+    pub fn assert_storage_usage(&self) {
+        env::log(self.storage_usage().to_string().as_bytes());
+        env::log(self.near_amount.to_string().as_bytes());
+        assert!(
+            self.storage_usage() <= self.near_amount,
+            "{}",
+            ERR11_INSUFFICIENT_STORAGE
+        )
     }
 }
