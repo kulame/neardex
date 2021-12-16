@@ -176,6 +176,22 @@ impl Contract {
         account.assert_storage_usage();
         self.accounts.insert(&account.account_id.clone(), &account);
     }
+
+    pub fn internal_storage_withdraw(&mut self, account_id: &AccountId, amount: Balance) -> u128 {
+        let mut account = self
+            .internal_get_account(account_id)
+            .expect(ERR10_ACC_NOT_REGISTERED);
+        let available = account.storage_available();
+        assert!(available > 0, "ERR_NO_STORAGE_CAN_WITHDRAW");
+        let mut withdraw_amount = amount;
+        if amount == 0 {
+            withdraw_amount = available;
+        }
+        assert!(withdraw_amount <= available, "ERR_WITHDRAW_AMOUNT_TOO_BIG");
+        account.near_amount -= withdraw_amount;
+        self.internal_save_account(account);
+        withdraw_amount
+    }
 }
 #[cfg(test)]
 mod tests {

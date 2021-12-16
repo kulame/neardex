@@ -2,7 +2,10 @@ use crate::*;
 use near_contract_standards::storage_management::{
     StorageBalance, StorageBalanceBounds, StorageManagement,
 };
-use near_sdk::json_types::{ValidAccountId, U128};
+use near_sdk::{
+    assert_one_yocto,
+    json_types::{ValidAccountId, U128},
+};
 use near_sdk::{env, log, near_bindgen};
 use std::convert::TryInto;
 
@@ -47,9 +50,14 @@ impl StorageManagement for Contract {
 
     #[payable]
     fn storage_withdraw(&mut self, amount: Option<U128>) -> StorageBalance {
+        self.assert_contract_running();
+        assert_one_yocto();
         let account_id = env::predecessor_account_id();
-        let id = "kulasama.near".try_into().unwrap();
-        self.storage_balance_of(id).unwrap()
+        let amount = amount.unwrap_or(U128(0)).0;
+        let withdraw_amount = self.internal_storage_withdraw(&account_id, amount);
+        Promise::new(account_id.clone()).transfer(withdraw_amount);
+        self.storage_balance_of(account_id.try_into().unwrap())
+            .unwrap()
     }
 
     #[payable]
