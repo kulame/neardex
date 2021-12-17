@@ -62,7 +62,20 @@ impl StorageManagement for Contract {
 
     #[payable]
     fn storage_unregister(&mut self, force: Option<bool>) -> bool {
-        true
+        self.assert_contract_running();
+        assert_one_yocto();
+        let account_id = env::predecessor_account_id();
+        if let Some(account_deposit) = self.internal_get_account(&account_id) {
+            assert!(
+                account_deposit.tokens.is_empty(),
+                "ERR_STORAGE_UNREGISTER_TOKENS_NOT_EMPTY"
+            );
+            self.accounts.remove(&account_id);
+            Promise::new(account_id.clone()).transfer(account_deposit.near_amount);
+            true
+        } else {
+            false
+        }
     }
 
     fn storage_balance_bounds(&self) -> StorageBalanceBounds {
