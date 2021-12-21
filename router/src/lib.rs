@@ -15,9 +15,9 @@ mod account;
 mod errors;
 mod storage_impl;
 mod utils;
+mod views;
 
 use crate::errors::*;
-use crate::utils::quote;
 
 near_sdk::setup_alloc!();
 

@@ -1,5 +1,5 @@
 use crate::*;
-use near_sdk::collections::UnorderedMap;
+use near_sdk::{assert_one_yocto, collections::UnorderedMap};
 use near_sdk::{env, AccountId, Balance, StorageUsage};
 pub const UNIT_STORAGE: StorageUsage = 256;
 
@@ -40,5 +40,41 @@ impl Account {
             "{}",
             ERR11_INSUFFICIENT_STORAGE
         )
+    }
+
+    pub fn get_tokens(&self) -> Vec<AccountId> {
+        self.tokens.keys().collect()
+    }
+
+    pub fn get_balance(&self, token_id: &AccountId) -> Option<Balance> {
+        if let Some(token_balance) = self.tokens.get(token_id) {
+            Some(token_balance)
+        } else {
+            None
+        }
+    }
+
+    pub fn register(&mut self, token_ids: &Vec<ValidAccountId>) {
+        for token_id in token_ids {
+            let t = token_id.as_ref();
+            if self.get_balance(t).is_none() {
+                self.tokens.insert(t, &0);
+            }
+        }
+    }
+}
+
+#[near_bindgen]
+impl Contract {
+    #[payable]
+    pub fn register_tokens(&mut self, token_ids: Vec<ValidAccountId>) {
+        assert_one_yocto();
+        self.assert_contract_running();
+        let sender_id = env::predecessor_account_id();
+        let mut account = self
+            .internal_get_account(&sender_id)
+            .expect(ERR10_ACC_NOT_REGISTERED);
+        account.register(&token_ids);
+        self.internal_save_account(account);
     }
 }
