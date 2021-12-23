@@ -62,6 +62,14 @@ impl Account {
             }
         }
     }
+
+    pub fn deposit(&mut self, token: &AccountId, amount: Balance) {
+        if let Some(x) = self.tokens.get(token) {
+            self.tokens.insert(token, &(amount + x));
+        } else {
+            self.tokens.insert(token, &amount);
+        }
+    }
 }
 
 #[near_bindgen]

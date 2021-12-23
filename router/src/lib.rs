@@ -141,8 +141,7 @@ impl FungibleTokenReceiver for Contract {
         msg: String,
     ) -> PromiseOrValue<U128> {
         let token_in = env::predecessor_account_id();
-        env::log(token_in.as_bytes());
-        env::log("test ft_on_transfer kula".as_bytes());
+        self.internal_deposit(sender_id.as_ref(), &token_in, amount.into());
         PromiseOrValue::Value(U128(0))
     }
 }
@@ -191,6 +190,19 @@ impl Contract {
         account.near_amount -= withdraw_amount;
         self.internal_save_account(account);
         withdraw_amount
+    }
+
+    pub fn internal_deposit(
+        &mut self,
+        sender_id: &AccountId,
+        token_id: &AccountId,
+        amount: Balance,
+    ) {
+        let mut account = self
+            .internal_get_account(sender_id)
+            .expect(ERR10_ACC_NOT_REGISTERED);
+        account.deposit(token_id, amount);
+        self.internal_save_account(account);
     }
 }
 #[cfg(test)]

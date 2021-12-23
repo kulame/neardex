@@ -1,5 +1,6 @@
 use crate::*;
 use near_sdk::near_bindgen;
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
@@ -23,5 +24,18 @@ impl Contract {
                 deposit: U128(x.near_amount),
                 usage: U128(x.storage_usage()),
             })
+    }
+
+    pub fn get_deposits(&self, account_id: ValidAccountId) -> HashMap<AccountId, U128> {
+        let wrapped_account = self.internal_get_account(account_id.as_ref());
+        if let Some(account) = wrapped_account {
+            account
+                .get_tokens()
+                .iter()
+                .map(|token| (token.clone(), U128(account.get_balance(token).unwrap())))
+                .collect()
+        } else {
+            HashMap::new()
+        }
     }
 }
